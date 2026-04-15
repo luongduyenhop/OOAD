@@ -1,0 +1,106 @@
+@inject SchedulingApp.Services.IAuthService AuthService
+@{
+    var currentUserName = AuthService.GetCurrentUserName();
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Smart Scheduler</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- FullCalendar CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --google-blue: #4285f4;
+            --google-red: #db4437;
+            --google-yellow: #f4b400;
+            --google-green: #0f9d58;
+        }
+
+        body { 
+            font-family: 'Inter', 'Roboto', sans-serif; 
+            background-color: #f8f9fa; 
+            color: #3c4043;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .navbar { 
+            background-color: #ffffff !important; 
+            border-bottom: 1px solid #e0e0e0; 
+            height: 64px;
+            z-index: 1030;
+        }
+
+        .navbar-brand { 
+            font-weight: 500; 
+            color: #5f6368 !important;
+            font-size: 22px;
+        }
+
+        .main-container {
+            height: calc(100vh - 64px);
+        }
+
+        .btn-primary {
+            background-color: var(--google-blue);
+            border-color: var(--google-blue);
+        }
+
+        .btn-primary:hover {
+            background-color: #1a73e8;
+            box-shadow: 0 1px 3px 1px rgba(66,133,244,0.15), 0 1px 2px 0 rgba(66,133,244,0.3);
+        }
+
+        .card {
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-sm navbar-light bg-white sticky-top shadow-sm">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="https://www.gstatic.com/images/branding/product/1x/calendar_2020q4_48dp.png" width="40" height="40" class="me-2" alt="Logo">
+                <span class="d-none d-md-inline">Smart Scheduler</span>
+                <span class="ms-2 badge bg-light text-primary border border-primary-subtle fw-normal" style="font-size: 0.6rem;">OOAD BCE Pattern</span>
+            </a>
+            
+            <div class="ms-auto d-flex align-items-center gap-3">
+                @if (!string.IsNullOrWhiteSpace(currentUserName))
+                {
+                    <div class="d-none d-lg-block text-end me-3">
+                        <div class="small fw-bold">@currentUserName</div>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="smaller text-muted mb-0">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-link p-0 text-decoration-none text-danger">Đăng xuất</button>
+                        </form>
+                    </div>
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; font-weight: 600;">
+                        @currentUserName.Substring(0, 1).ToUpperInvariant()
+                    </div>
+                }
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        @RenderBody()
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

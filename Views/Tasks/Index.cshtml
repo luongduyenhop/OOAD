@@ -1,0 +1,426 @@
+@model List<SchedulingApp.Models.AppTask>
+@using SchedulingApp.Models
+@using System.Collections.Generic
+
+@{
+    ViewData["Title"] = "Lịch trình Cá nhân (OOAD Edition)";
+    var categories = ViewBag.Categories as List<Category> ?? new List<Category>();
+    var statusCounts = ViewBag.StatusCounts as Dictionary<AppTaskStatus, int> ?? new Dictionary<AppTaskStatus, int>();
+}
+
+<div class="row g-0 h-100" style="min-height: calc(100vh - 80px);">
+    <!-- Sidebar -->
+    <aside class="col-md-3 col-lg-2 border-end bg-white p-4 d-flex flex-column shadow-sm">
+        <button class="btn btn-primary rounded-pill mb-4 shadow-sm py-2 px-4 d-flex align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+            <span class="fs-4 me-2">+</span> <span class="fw-medium">Tạo mới</span>
+        </button>
+
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="text-muted text-uppercase small fw-bold mb-0 ls-wide">📂 Phân loại</h6>
+                <button class="btn btn-sm btn-outline-secondary p-1 border-0" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal" title="Quản lý danh mục">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+            </div>
+            <ul class="list-unstyled d-flex flex-column gap-2 small">
+                <li><a href="/" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"].Count == 0 ? "fw-bold text-primary" : "")">Tất cả</a></li>
+                @foreach (var cat in categories) {
+                    <li class="d-flex align-items-center justify-content-between">
+                        <a href="?categoryId=@cat.Id" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"] == cat.Id.ToString() ? "fw-bold text-primary" : "")">
+                            <span class="badge rounded-circle p-1 me-2" style="background-color: #4285f4; width: 8px; height: 8px; display: inline-block;"></span>@cat.Name
+                        </a>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="mb-4">
+            <h6 class="text-muted text-uppercase small fw-bold mb-3 ls-wide">📅 Trạng thái</h6>
+            <div class="d-flex flex-column gap-2">
+                @foreach (AppTaskStatus status in Enum.GetValues(typeof(AppTaskStatus)))
+                {
+                    var count = statusCounts.ContainsKey(status) ? statusCounts[status] : 0;
+                    var badgeClass = status switch {
+                        AppTaskStatus.Created => "bg-secondary",
+                        AppTaskStatus.InProgress => "bg-primary",
+                        AppTaskStatus.Completed => "bg-success",
+                        AppTaskStatus.Overdue => "bg-danger",
+                        AppTaskStatus.Archived => "bg-dark",
+                        _ => "bg-light text-dark"
+                    };
+                    <a href="?status=@status" class="text-decoration-none d-flex justify-content-between align-items-center p-2 rounded-2 hover-bg-light @(Context.Request.Query["status"] == status.ToString() ? "bg-light fw-bold" : "")">
+                        <span class="small text-dark">@status</span>
+                        <span class="badge @badgeClass rounded-pill">@count</span>
+                    </a>
+                }
+            </div>
+        </div>
+
+        <div class="mt-auto pt-3 border-top">
+            <div class="small text-muted mb-2"><i class="bi bi-info-circle me-1"></i> OOAD Pattern: BCE</div>
+            <div class="d-flex gap-2">
+                <span class="badge bg-outline-secondary border text-dark smaller">State Machine Ready</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="col-md-9 col-lg-10 p-0 bg-light d-flex flex-column">
+        <!-- Top Bar: Search & Filter (Use Case: Search Task, Filter Tasks) -->
+        <div class="bg-white border-bottom p-3 px-4">
+            <form action="/" method="GET" class="row g-2">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                        <input name="searchTerm" class="form-control bg-light border-0" placeholder="Tìm kiếm công việc..." value="@Context.Request.Query["searchTerm"]">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select name="categoryId" class="form-select bg-light border-0">
+                        <option value="">Tất cả danh mục</option>
+                        @foreach(var cat in categories) {
+                            <option value="@cat.Id">@cat.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Lọc</button>
+                </div>
+                <div class="col-md-1 text-end">
+                    <a href="/" class="btn btn-light w-100"><i class="bi bi-x-lg"></i></a>
+                </div>
+            </form>
+        </div>
+
+        <div class="flex-grow-1 p-3 overflow-hidden">
+            <div class="card border-0 shadow-sm h-100 overflow-hidden">
+                <div class="card-body p-0">
+                    <div id="calendar" class="h-100"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal Thêm mới -->
+<div class="modal fade" id="addTaskModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-0 bg-primary text-white">
+                <h5 class="modal-title fw-bold">📅 Tạo công việc mới</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-4">
+                        <label class="form-label small text-muted text-uppercase fw-bold">Tiêu đề</label>
+                        <input name="title" class="form-control border-0 border-bottom rounded-0 px-0 fs-5 focus-ring" placeholder="Tiêu đề..." required />
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted text-uppercase fw-bold">Thời điểm</label>
+                            <input name="dateTime" id="addDateTime" type="datetime-local" class="form-control bg-light border-0" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted text-uppercase fw-bold">Nhắc nhở (Reminder)</label>
+                            <input name="reminderTime" type="datetime-local" class="form-control bg-light border-0" />
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small text-muted text-uppercase fw-bold">Phân loại</label>
+                        <select name="categoryName" class="form-select bg-light border-0">
+                            @foreach(var cat in categories) { <option value="@cat.Name">@cat.Name</option> }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted text-uppercase fw-bold d-block mb-3">Loại công việc</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="form-check card p-3 h-100 cursor-pointer shadow-none border" onclick="toggleFrequency(false, 'frequencySection')">
+                                    <input name="type" type="radio" value="Simple" class="form-check-input" checked id="typeSimple" />
+                                    <label class="form-check-label ms-1" for="typeSimple"><strong>Công việc đơn</strong></label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check card p-3 h-100 cursor-pointer shadow-none border" onclick="toggleFrequency(true, 'frequencySection')">
+                                    <input name="type" type="radio" value="Recurring" class="form-check-input" id="typeRecurring" />
+                                    <label class="form-check-label ms-1" for="typeRecurring"><strong>Lặp lại</strong></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="frequencySection" class="mb-4 d-none">
+                        <select name="frequency" class="form-select bg-light border-0">
+                            <option value="Daily">Hàng ngày</option>
+                            <option value="Weekly">Hàng tuần</option>
+                            <option value="Monthly">Hàng tháng</option>
+                            <option value="Monday_Friday">Thứ 2 - Thứ 6</option>
+                            <option value="Weekend">Cuối tuần</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 w-100">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Chỉnh sửa -->
+<div class="modal fade" id="editTaskModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-0 bg-info text-white">
+                <h5 class="modal-title fw-bold">✏️ Chỉnh sửa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Edit" method="post">
+                <input type="hidden" name="id" id="editTaskId" />
+                <div class="modal-body p-4">
+                    <div class="mb-4">
+                        <input name="title" id="editTaskTitle" class="form-control border-0 border-bottom rounded-0 px-0 fs-5" required />
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="small text-muted">Thời điểm</label>
+                            <input name="dateTime" id="editTaskDateTime" type="datetime-local" class="form-control bg-light border-0" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small text-muted">Nhắc nhở</label>
+                            <input name="reminderTime" id="editTaskReminder" type="datetime-local" class="form-control bg-light border-0" />
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="small text-muted">Phân loại</label>
+                        <select name="categoryName" id="editTaskCategory" class="form-select bg-light border-0">
+                            @foreach(var cat in categories) { <option value="@cat.Name">@cat.Name</option> }
+                        </select>
+                    </div>
+                    <div id="editFrequencySection" class="mb-4 d-none">
+                        <select name="frequency" id="editTaskFrequency" class="form-select bg-light border-0">
+                            <option value="Daily">Hàng ngày</option>
+                            <option value="Weekly">Hàng tuần</option>
+                            <option value="Monthly">Hàng tháng</option>
+                            <option value="Monday_Friday">Thứ 2 - Thứ 6</option>
+                            <option value="Weekend">Cuối tuần</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted d-block mb-2">Trạng thái hiện tại</label>
+                        <span id="editTaskStatusBadge" class="badge bg-info p-2 fs-6"></span>
+                    </div>
+                    <input type="hidden" name="status" id="editTaskStatus" />
+                    <input type="hidden" name="type" id="editTaskType">
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="button" class="btn btn-outline-danger rounded-pill px-4 me-auto" onclick="deleteTask(document.getElementById('editTaskId').value)">Xóa</button>
+                    <button type="submit" class="btn btn-info rounded-pill px-5 text-white">Cập nhật</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function appendAntiForgeryToken(form) {
+        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+        if (!tokenInput) return;
+
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = '__RequestVerificationToken';
+        hidden.value = tokenInput.value;
+        form.appendChild(hidden);
+    }
+
+    async function deleteTask(id) {
+        if (confirm('Bạn có chắc chắn muốn xóa công việc này?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/Tasks/Delete';
+            form.innerHTML = `<input type="hidden" name="id" value="${id}">`;
+            appendAntiForgeryToken(form);
+            document.body.appendChild(form); form.submit();
+        }
+    }
+</script>
+
+<!-- Modal Quản lý Danh mục -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-0 bg-secondary text-white">
+                <h5 class="modal-title fw-bold">📂 Quản lý danh mục</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form asp-action="AddCategory" method="post" class="mb-4">
+                    <label class="form-label small text-muted text-uppercase fw-bold">Thêm danh mục mới</label>
+                    <div class="input-group">
+                        <input name="name" class="form-control bg-light border-0" placeholder="Tên danh mục..." required />
+                        <button type="submit" class="btn btn-primary px-3">Thêm</button>
+                    </div>
+                </form>
+                
+                <label class="form-label small text-muted text-uppercase fw-bold mb-2">Danh sách hiện có</label>
+                <div class="list-group list-group-flush border-top">
+                    @foreach(var cat in categories) {
+                        <div class="list-group-item d-flex justify-content-between align-items-center bg-transparent px-0 py-3">
+                            <span>@cat.Name</span>
+                            <form asp-action="DeleteCategory" method="post" onsubmit="return confirm('Xóa danh mục này sẽ gỡ phân loại khỏi các công việc liên quan. Tiếp tục?')">
+                                <input type="hidden" name="id" value="@cat.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-0">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ls-wide { letter-spacing: 0.05em; }
+    .smaller { font-size: 0.7rem; }
+    .swal-custom-container { text-align: left !important; font-family: 'Inter', sans-serif !important; }
+    .badge { cursor: pointer; transition: opacity 0.2s; }
+    .badge:hover { opacity: 0.8; }
+    .hover-bg-light:hover { background-color: #f8f9fa; }
+    .cursor-pointer { cursor: pointer; }
+    .swal2-container { z-index: 1040 !important; }
+    #editTaskModal { z-index: 1080; }
+</style>
+
+@section Scripts {
+    <script>
+        function toggleFrequency(show, sectionId) {
+            const section = document.getElementById(sectionId);
+            if (show) section.classList.remove('d-none');
+            else section.classList.add('d-none');
+        }
+
+        async function editTask(id) {
+            if (window.Swal) {
+                Swal.close();
+            }
+
+            const response = await fetch(`/Tasks/GetTask/${id}`);
+            if (response.ok) {
+                const task = await response.json();
+                document.getElementById('editTaskId').value = task.id;
+                document.getElementById('editTaskTitle').value = task.title;
+                document.getElementById('editTaskDateTime').value = task.dateTime;
+                document.getElementById('editTaskReminder').value = task.reminderTime;
+                document.getElementById('editTaskStatus').value = task.status;
+                document.getElementById('editTaskStatusBadge').innerText = task.status;
+                document.getElementById('editTaskType').value = task.type;
+                document.getElementById('editTaskCategory').value = task.categoryName;
+                
+                const freqSection = document.getElementById('editFrequencySection');
+                if (task.type === 'Recurring') {
+                    freqSection.classList.remove('d-none');
+                    document.getElementById('editTaskFrequency').value = task.frequency;
+                } else { freqSection.classList.add('d-none'); }
+                
+                setTimeout(() => {
+                    new bootstrap.Modal(document.getElementById('editTaskModal')).show();
+                }, 120);
+            }
+        }
+
+        async function updateStatus(id, newStatus, date) {
+            const form = document.createElement('form');
+            form.method = 'POST'; 
+            form.action = '/Tasks/UpdateStatus';
+            form.innerHTML = `
+                <input type="hidden" name="id" value="${id}">
+                <input type="hidden" name="newStatus" value="${newStatus}">
+                <input type="hidden" name="date" value="${date ?? ''}">
+            `;
+            appendAntiForgeryToken(form);
+            document.body.appendChild(form); form.submit();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth', locale: 'vi', height: '100%',
+                headerToolbar: { left: 'today prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                
+                dateClick: function(info) {
+                    document.getElementById('addDateTime').value = info.dateStr + 'T08:00';
+                    new bootstrap.Modal(document.getElementById('addTaskModal')).show();
+                },
+
+                events: [
+                    @foreach (var task in Model) {
+                        if (task.Status == AppTaskStatus.Archived) continue;
+                        var color = "#4285f4";
+                        if (task.Status == AppTaskStatus.InProgress) color = "#1a73e8";
+                        if (task.Status == AppTaskStatus.Completed) color = "#0f9d58";
+                        if (task.Status == AppTaskStatus.Overdue) color = "#db4437";
+                        
+                        var titlePrefix = task is RecurringTask ? "🔄 " : "";
+                        foreach (var occDate in task.GetOccurrences(DateTime.Now.AddMonths(-1), DateTime.Now.AddMonths(6))) {
+                            <text>{
+                                id: @Json.Serialize(task.Id),
+                                title: @Json.Serialize(titlePrefix + task.Title),
+                                start: @Json.Serialize(occDate.ToString("yyyy-MM-ddTHH:mm:ss")),
+                                color: "@color",
+                                extendedProps: { 
+                                    status: "@task.Status", 
+                                    details: @Json.Serialize(task.GetDetails()),
+                                    occurrenceDate: "@occDate.ToString("yyyy-MM-ddTHH:mm:ss")" 
+                                }
+                            },</text>
+                        }
+                    }
+                ],
+
+                eventClick: async function(info) {
+                    const eventDate = info.event.extendedProps.occurrenceDate;
+                    
+                    // Lấy dữ liệu task thực tế để biết các transitions hợp lệ (OOAD Encapsulation)
+                    const response = await fetch(`/Tasks/GetTask/${info.event.id}`);
+                    if (!response.ok) return;
+                    const task = await response.json();
+
+                    let actionsHtml = `<div class="d-flex flex-wrap gap-2 justify-content-center mt-3">`;
+                    
+                    // Duyệt qua các transitions hợp lệ được trả về từ Domain Model
+                    task.transitions.forEach(status => {
+                        let btnClass = "btn-outline-primary";
+                        let btnText = status;
+                        
+                        if (status === 'InProgress') { btnClass = "btn-primary"; btnText = "▶️ Bắt đầu"; }
+                        if (status === 'Completed') { btnClass = "btn-success"; btnText = "✅ Hoàn thành"; }
+                        if (status === 'Archived') { btnClass = "btn-dark"; btnText = "📦 Lưu trữ"; }
+                        
+                        actionsHtml += `<button onclick="updateStatus(${task.id}, '${status}', '${eventDate}')" class="btn ${btnClass} btn-sm">${btnText}</button>`;
+                    });
+                    
+                    actionsHtml += `<button onclick="editTask(${task.id})" class="btn btn-info btn-sm text-white">✏️ Sửa chi tiết</button>`;
+                    actionsHtml += `<button onclick="deleteTask(${task.id})" class="btn btn-danger btn-sm">🗑️ Xóa</button></div>`;
+
+                    Swal.fire({
+                        title: task.title,
+                        html: `<div class="text-start mt-2">
+                                 <div class="mb-2"><span class="badge bg-info p-2">${task.status}</span></div>
+                                 <div class="mt-2 text-muted small">${info.event.extendedProps.details}</div>
+                                 <hr>
+                                 <div class="small fw-bold text-uppercase text-muted">Hành động khả dụng:</div>
+                                 ${actionsHtml}
+                               </div>`,
+                        showConfirmButton: false,
+                        customClass: { popup: 'rounded-4 shadow-lg' }
+                    });
+                }
+            });
+            calendar.render();
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+}
