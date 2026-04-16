@@ -28,10 +28,14 @@
 
         <form asp-action="Register" method="post">
             <div class="mb-3">
-                <input type="text" name="username" class="form-control" placeholder="Tên người dùng" required autofocus>
+                <input type="text" name="fullName" class="form-control" placeholder="Họ và tên" required autofocus>
+            </div>
+            <div class="mb-3">
+                <input type="email" name="email" class="form-control" placeholder="Email" required>
             </div>
             <div class="mb-3">
                 <input type="password" name="password" class="form-control" placeholder="Mật khẩu" required>
+                <div class="form-text">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số.</div>
             </div>
             
             @if (ViewBag.Error != null)

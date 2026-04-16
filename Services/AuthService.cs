@@ -9,8 +9,8 @@ namespace SchedulingApp.Services
 {
     public interface IAuthService
     {
-        Task<bool> LoginAsync(string username, string password);
-        Task<(bool Success, string? Error)> RegisterAsync(string username, string password);
+        Task<bool> LoginAsync(string identifier, string password);
+        Task<(bool Success, string? Error)> RegisterAsync(string fullName, string email, string password);
         Task LogoutAsync();
         int? GetCurrentUserId();
         string? GetCurrentUserName();
@@ -33,9 +33,16 @@ namespace SchedulingApp.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<bool> LoginAsync(string username, string password)
+        public async Task<bool> LoginAsync(string identifier, string password)
         {
-            var user = await _userManager.FindByNameAsync(username);
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                return false;
+            }
+
+            var normalized = identifier.Trim();
+            var user = await _userManager.FindByEmailAsync(normalized) 
+                ?? await _userManager.FindByNameAsync(normalized);
             if (user == null)
             {
                 return false;
@@ -49,12 +56,24 @@ namespace SchedulingApp.Services
             return result.Succeeded;
         }
 
-        public async Task<(bool Success, string? Error)> RegisterAsync(string username, string password)
+        public async Task<(bool Success, string? Error)> RegisterAsync(string fullName, string email, string password)
         {
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                return (false, "Họ tên không được để trống.");
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return (false, "Email không được để trống.");
+            }
+
+            var normalizedEmail = email.Trim();
             var user = new ApplicationUser
             {
-                UserName = username,
-                FullName = username
+                UserName = normalizedEmail,
+                Email = normalizedEmail,
+                FullName = fullName.Trim()
             };
 
             var result = await _userManager.CreateAsync(user, password);

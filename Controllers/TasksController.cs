@@ -13,22 +13,61 @@ namespace SchedulingApp.Controllers
     {
         private readonly ITaskService _taskService;
         private readonly IAuthService _authService;
+        private readonly IReminderService _reminderService;
 
-        public TasksController(ITaskService taskService, IAuthService authService)
+        public TasksController(ITaskService taskService, IAuthService authService, IReminderService reminderService)
         {
             _taskService = taskService;
             _authService = authService;
+            _reminderService = reminderService;
         }
 
-        public async Task<IActionResult> Index(string? searchTerm, int? categoryId, AppTaskStatus? status)
+        public async Task<IActionResult> Index(string? searchTerm, int? categoryId, AppTaskStatus? status, TaskPriority? priority)
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
             
-            var tasks = await _taskService.GetTasksAsync(userId.Value, searchTerm, categoryId, status);
+            var tasks = await _taskService.GetTasksAsync(userId.Value, searchTerm, categoryId, status, priority);
             ViewBag.Categories = await _taskService.GetCategoriesAsync();
             ViewBag.StatusCounts = await _taskService.GetStatusCountsAsync(userId.Value); // Gửi thống kê trạng thái
+            var unread = await _reminderService.GetUnreadNotificationsAsync(userId.Value, 10);
+            ViewBag.ReminderNotifications = unread;
+            ViewBag.UnreadReminderCount = unread.Count;
             return View(tasks);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MarkReminderRead(int id)
+        {
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
+            await _reminderService.MarkAsReadAsync(id, userId.Value);
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MarkAllRemindersRead()
+        {
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
+            await _reminderService.MarkAllAsReadAsync(userId.Value);
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendTestReminderEmail()
+        {
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
+            var result = await _reminderService.SendTestEmailAsync(userId.Value);
+            TempData["EmailTest"] = result.Success ? "Gui email test thanh cong. Kiem tra Inbox/Spam." : $"Gui email test that bai: {result.Error}";
+            return RedirectToAction("Index");
         }
 
         [HttpPost]
@@ -49,12 +88,12 @@ namespace SchedulingApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency = TaskFrequency.Daily, DateTime? reminderTime = null)
+        public async Task<IActionResult> Create(string title, string type, string categoryName, DateTime dateTime, TaskPriority priority = TaskPriority.Medium, TaskFrequency frequency = TaskFrequency.Daily, DateTime? reminderTime = null)
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
             
-            await _taskService.CreateTaskAsync(userId.Value, title, type, categoryName, dateTime, frequency, reminderTime);
+            await _taskService.CreateTaskAsync(userId.Value, title, type, categoryName, dateTime, priority, frequency, reminderTime);
             return RedirectToAction("Index");
         }
 
@@ -77,12 +116,24 @@ namespace SchedulingApp.Controllers
             var task = await _taskService.GetTaskByIdAsync(id, userId.Value);
             if (task == null) return NotFound();
 
+            string statusLabel = task.Status switch
+            {
+                AppTaskStatus.Created => "Chưa bắt đầu",
+                AppTaskStatus.InProgress => "Đang thực hiện",
+                AppTaskStatus.Completed => "Hoàn thành",
+                AppTaskStatus.Overdue => "Quá hạn",
+                AppTaskStatus.Archived => "Lưu trữ",
+                _ => task.Status.ToString()
+            };
+
             return Json(new { 
                 id = task.Id, title = task.Title, dateTime = task.DateTime.ToString("yyyy-MM-ddTHH:mm"),
                 categoryName = task.Category?.Name,
                 type = task is RecurringTask ? "Recurring" : "Simple",
                 frequency = (task as RecurringTask)?.Frequency.ToString() ?? "None",
+                priority = task.Priority.ToString(),
                 status = task.Status.ToString(),
+                statusLabel,
                 reminderTime = task.ReminderTime?.ToString("yyyy-MM-ddTHH:mm"),
                 transitions = task.GetAvailableTransitions().Select(t => t.ToString()) // Trả về danh sách hành động hợp lệ
             });
@@ -90,12 +141,12 @@ namespace SchedulingApp.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency = TaskFrequency.Daily, DateTime? reminderTime = null, AppTaskStatus? status = null)
+        public async Task<IActionResult> Edit(int id, string title, string type, string categoryName, DateTime dateTime, TaskPriority priority = TaskPriority.Medium, TaskFrequency frequency = TaskFrequency.Daily, DateTime? reminderTime = null, AppTaskStatus? status = null)
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
             
-            await _taskService.UpdateTaskAsync(userId.Value, id, title, type, categoryName, dateTime, frequency, reminderTime, status);
+            await _taskService.UpdateTaskAsync(userId.Value, id, title, type, categoryName, dateTime, priority, frequency, reminderTime, status);
             return RedirectToAction("Index");
         }
 

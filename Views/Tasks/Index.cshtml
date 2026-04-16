@@ -1,16 +1,34 @@
 @model List<SchedulingApp.Models.AppTask>
 @using SchedulingApp.Models
 @using System.Collections.Generic
+@using System
 
 @{
     ViewData["Title"] = "Lịch trình Cá nhân (OOAD Edition)";
     var categories = ViewBag.Categories as List<Category> ?? new List<Category>();
     var statusCounts = ViewBag.StatusCounts as Dictionary<AppTaskStatus, int> ?? new Dictionary<AppTaskStatus, int>();
+    var reminders = ViewBag.ReminderNotifications as List<ReminderNotification> ?? new List<ReminderNotification>();
+    var unreadReminderCount = ViewBag.UnreadReminderCount is int c ? c : 0;
+
+    Func<AppTaskStatus, string> statusLabel = s => s switch
+    {
+        AppTaskStatus.Created => "Chưa bắt đầu",
+        AppTaskStatus.InProgress => "Đang thực hiện",
+        AppTaskStatus.Completed => "Hoàn thành",
+        AppTaskStatus.Overdue => "Quá hạn",
+        AppTaskStatus.Archived => "Lưu trữ",
+        _ => s.ToString()
+    };
 }
 
 <div class="row g-0 h-100" style="min-height: calc(100vh - 80px);">
     <!-- Sidebar -->
     <aside class="col-md-3 col-lg-2 border-end bg-white p-4 d-flex flex-column shadow-sm">
+        @if (TempData["EmailTest"] != null)
+        {
+            <div class="alert alert-info py-2 small">@TempData["EmailTest"]</div>
+        }
+
         <button class="btn btn-primary rounded-pill mb-4 shadow-sm py-2 px-4 d-flex align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#addTaskModal">
             <span class="fs-4 me-2">+</span> <span class="fw-medium">Tạo mới</span>
         </button>
@@ -37,7 +55,11 @@
         <div class="mb-4">
             <h6 class="text-muted text-uppercase small fw-bold mb-3 ls-wide">📅 Trạng thái</h6>
             <div class="d-flex flex-column gap-2">
-                @foreach (AppTaskStatus status in Enum.GetValues(typeof(AppTaskStatus)))
+                @{
+                    // Hide "Archived" from sidebar; it's treated as a history state, not an active workflow filter.
+                    var visibleStatuses = new[] { AppTaskStatus.Created, AppTaskStatus.InProgress, AppTaskStatus.Completed, AppTaskStatus.Overdue };
+                }
+                @foreach (var status in visibleStatuses)
                 {
                     var count = statusCounts.ContainsKey(status) ? statusCounts[status] : 0;
                     var badgeClass = status switch {
@@ -49,11 +71,47 @@
                         _ => "bg-light text-dark"
                     };
                     <a href="?status=@status" class="text-decoration-none d-flex justify-content-between align-items-center p-2 rounded-2 hover-bg-light @(Context.Request.Query["status"] == status.ToString() ? "bg-light fw-bold" : "")">
-                        <span class="small text-dark">@status</span>
+                        <span class="small text-dark">@statusLabel(status)</span>
                         <span class="badge @badgeClass rounded-pill">@count</span>
                     </a>
                 }
             </div>
+        </div>
+
+        <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-muted text-uppercase small fw-bold mb-0 ls-wide">🔔 Nhắc việc</h6>
+                <span class="badge bg-danger rounded-pill">@unreadReminderCount</span>
+            </div>
+
+            <form asp-action="SendTestReminderEmail" method="post" class="mb-2">
+                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Gửi email test</button>
+            </form>
+
+            @if (reminders.Count == 0)
+            {
+                <div class="small text-muted">Không có nhắc việc chưa đọc.</div>
+            }
+            else
+            {
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var r in reminders)
+                    {
+                        <div class="border rounded-2 p-2 bg-light">
+                            <div class="small fw-semibold text-dark text-truncate">@r.Message</div>
+                            <div class="smaller text-muted">@r.ReminderTime.ToString("HH:mm dd/MM/yyyy")</div>
+                            <form asp-action="MarkReminderRead" method="post" class="mt-1">
+                                <input type="hidden" name="id" value="@r.Id" />
+                                <button type="submit" class="btn btn-sm btn-link text-decoration-none p-0">Đánh dấu đã đọc</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+
+                <form asp-action="MarkAllRemindersRead" method="post" class="mt-2">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Đánh dấu tất cả đã đọc</button>
+                </form>
+            }
         </div>
 
         <div class="mt-auto pt-3 border-top">
@@ -69,7 +127,7 @@
         <!-- Top Bar: Search & Filter (Use Case: Search Task, Filter Tasks) -->
         <div class="bg-white border-bottom p-3 px-4">
             <form action="/" method="GET" class="row g-2">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <div class="input-group">
                         <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
                         <input name="searchTerm" class="form-control bg-light border-0" placeholder="Tìm kiếm công việc..." value="@Context.Request.Query["searchTerm"]">
@@ -79,11 +137,20 @@
                     <select name="categoryId" class="form-select bg-light border-0">
                         <option value="">Tất cả danh mục</option>
                         @foreach(var cat in categories) {
-                            <option value="@cat.Id">@cat.Name</option>
+                            <option value="@cat.Id" selected="@(Context.Request.Query["categoryId"] == cat.Id.ToString())">@cat.Name</option>
                         }
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <select name="priority" class="form-select bg-light border-0">
+                        <option value="">Mọi ưu tiên</option>
+                        @foreach (TaskPriority p in Enum.GetValues(typeof(TaskPriority)))
+                        {
+                            <option value="@p" selected="@(Context.Request.Query["priority"] == p.ToString())">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-primary w-100">Lọc</button>
                 </div>
                 <div class="col-md-1 text-end">
@@ -130,6 +197,14 @@
                         <label class="form-label small text-muted text-uppercase fw-bold">Phân loại</label>
                         <select name="categoryName" class="form-select bg-light border-0">
                             @foreach(var cat in categories) { <option value="@cat.Name">@cat.Name</option> }
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small text-muted text-uppercase fw-bold">Ưu tiên</label>
+                        <select name="priority" class="form-select bg-light border-0">
+                            <option value="Low">Thấp</option>
+                            <option value="Medium" selected>Trung bình</option>
+                            <option value="High">Cao</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -195,6 +270,14 @@
                         <label class="small text-muted">Phân loại</label>
                         <select name="categoryName" id="editTaskCategory" class="form-select bg-light border-0">
                             @foreach(var cat in categories) { <option value="@cat.Name">@cat.Name</option> }
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="small text-muted">Ưu tiên</label>
+                        <select name="priority" id="editTaskPriority" class="form-select bg-light border-0">
+                            <option value="Low">Thấp</option>
+                            <option value="Medium">Trung bình</option>
+                            <option value="High">Cao</option>
                         </select>
                     </div>
                     <div id="editFrequencySection" class="mb-4 d-none">
@@ -315,9 +398,10 @@
                 document.getElementById('editTaskDateTime').value = task.dateTime;
                 document.getElementById('editTaskReminder').value = task.reminderTime;
                 document.getElementById('editTaskStatus').value = task.status;
-                document.getElementById('editTaskStatusBadge').innerText = task.status;
+                document.getElementById('editTaskStatusBadge').innerText = task.statusLabel ?? task.status;
                 document.getElementById('editTaskType').value = task.type;
                 document.getElementById('editTaskCategory').value = task.categoryName;
+                document.getElementById('editTaskPriority').value = task.priority;
                 
                 const freqSection = document.getElementById('editFrequencySection');
                 if (task.type === 'Recurring') {
@@ -348,7 +432,7 @@
             var calendarEl = document.getElementById('calendar');
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth', locale: 'vi', height: '100%',
-                headerToolbar: { left: 'today prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                headerToolbar: { left: 'today prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
                 
                 dateClick: function(info) {
                     document.getElementById('addDateTime').value = info.dateStr + 'T08:00';
@@ -408,7 +492,7 @@
                     Swal.fire({
                         title: task.title,
                         html: `<div class="text-start mt-2">
-                                 <div class="mb-2"><span class="badge bg-info p-2">${task.status}</span></div>
+                                 <div class="mb-2"><span class="badge bg-info p-2">${task.statusLabel ?? task.status}</span></div>
                                  <div class="mt-2 text-muted small">${info.event.extendedProps.details}</div>
                                  <hr>
                                  <div class="small fw-bold text-uppercase text-muted">Hành động khả dụng:</div>

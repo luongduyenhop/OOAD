@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SchedulingApp.Services;
@@ -21,12 +22,12 @@ namespace SchedulingApp.Controllers
         [AllowAnonymous]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(string username, string password)
+        public async Task<IActionResult> Login(string email, string password)
         {
-            if (await _authService.LoginAsync(username, password))
+            if (await _authService.LoginAsync(email, password))
                 return RedirectToAction("Index", "Tasks");
             
-            ViewBag.Error = "Tên đăng nhập hoặc mật khẩu không chính xác.";
+            ViewBag.Error = "Email hoặc mật khẩu không chính xác.";
             return View();
         }
 
@@ -37,9 +38,21 @@ namespace SchedulingApp.Controllers
         [AllowAnonymous]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Register(string username, string password)
+        public async Task<IActionResult> Register(string fullName, string email, string password)
         {
-            var result = await _authService.RegisterAsync(username, password);
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                ViewBag.Error = "Vui lòng nhập họ và tên.";
+                return View();
+            }
+
+            if (!new EmailAddressAttribute().IsValid(email))
+            {
+                ViewBag.Error = "Email không hợp lệ.";
+                return View();
+            }
+
+            var result = await _authService.RegisterAsync(fullName, email, password);
             if (result.Success)
             {
                 return RedirectToAction("Login");

@@ -26,6 +26,13 @@ namespace SchedulingApp.Models
         Weekend
     }
 
+    public enum TaskPriority
+    {
+        Low = 0,
+        Medium = 1,
+        High = 2
+    }
+
     public class Category
     {
         [Key]
@@ -46,10 +53,24 @@ namespace SchedulingApp.Models
         public int UserId { get; set; }
 
         public AppTaskStatus Status { get; set; } = AppTaskStatus.Created;
+        public TaskPriority Priority { get; set; } = TaskPriority.Medium;
         public DateTime? ReminderTime { get; set; }
 
         public abstract string GetDetails();
         public abstract IEnumerable<DateTime> GetOccurrences(DateTime rangeStart, DateTime rangeEnd);
+
+        public string GetStatusLabel()
+        {
+            return Status switch
+            {
+                AppTaskStatus.Created => "Chưa bắt đầu",
+                AppTaskStatus.InProgress => "Đang thực hiện",
+                AppTaskStatus.Completed => "Hoàn thành",
+                AppTaskStatus.Overdue => "Quá hạn",
+                AppTaskStatus.Archived => "Lưu trữ",
+                _ => Status.ToString()
+            };
+        }
 
         // OOAD: Đóng gói logic chuyển đổi trạng thái (State Machine)
         public IEnumerable<AppTaskStatus> GetAvailableTransitions()
@@ -95,7 +116,7 @@ namespace SchedulingApp.Models
     public class SimpleTask : AppTask
     {
         public override string GetDetails() =>
-            $"Công việc: {Title} vào {DateTime:HH:mm dd/MM/yyyy} ({Category?.Name}) - Trạng thái: {Status}";
+            $"Công việc: {Title} vào {DateTime:HH:mm dd/MM/yyyy} ({Category?.Name}) - Ưu tiên: {Priority} - Trạng thái: {GetStatusLabel()}";
 
         public override IEnumerable<DateTime> GetOccurrences(DateTime rangeStart, DateTime rangeEnd)
         {
@@ -111,7 +132,7 @@ namespace SchedulingApp.Models
         public string? ExcludedDates { get; set; }
 
         public override string GetDetails() =>
-            $"[LẶP LẠI {Frequency}] {Title} lúc {DateTime:HH:mm} ({Category?.Name}) - Trạng thái: {Status}";
+            $"[LẶP LẠI {Frequency}] {Title} lúc {DateTime:HH:mm} ({Category?.Name}) - Ưu tiên: {Priority} - Trạng thái: {GetStatusLabel()}";
 
         public override IEnumerable<DateTime> GetOccurrences(DateTime rangeStart, DateTime rangeEnd)
         {
@@ -151,5 +172,24 @@ namespace SchedulingApp.Models
     public class ApplicationUser : IdentityUser<int>
     {
         public string FullName { get; set; } = string.Empty;
+    }
+
+    public class ReminderNotification
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int UserId { get; set; }
+        public ApplicationUser? User { get; set; }
+
+        public int TaskId { get; set; }
+        public AppTask? Task { get; set; }
+
+        public DateTime ReminderTime { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? SentAt { get; set; }
+
+        public bool IsRead { get; set; } = false;
+        public string Message { get; set; } = string.Empty;
     }
 }

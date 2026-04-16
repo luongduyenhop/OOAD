@@ -12,6 +12,7 @@ namespace SchedulingApp.Data
 
         public DbSet<AppTask> Tasks { get; set; } = null!;
         public DbSet<Category> Categories { get; set; } = null!;
+        public DbSet<ReminderNotification> ReminderNotifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,6 +36,34 @@ namespace SchedulingApp.Data
                 .HasOne(t => t.Category)
                 .WithMany()
                 .HasForeignKey("CategoryId");
+
+            modelBuilder.Entity<AppTask>()
+                .HasIndex(t => new { t.UserId, t.DateTime });
+            modelBuilder.Entity<AppTask>()
+                .HasIndex(t => new { t.UserId, t.Status });
+            modelBuilder.Entity<AppTask>()
+                .HasIndex(t => new { t.UserId, t.CategoryId });
+            modelBuilder.Entity<AppTask>()
+                .HasIndex(t => new { t.UserId, t.Priority });
+
+            modelBuilder.Entity<ReminderNotification>()
+                .HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ReminderNotification>()
+                .HasOne(r => r.Task)
+                .WithMany()
+                .HasForeignKey(r => r.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ReminderNotification>()
+                .HasIndex(r => new { r.UserId, r.IsRead });
+
+            modelBuilder.Entity<ReminderNotification>()
+                .HasIndex(r => new { r.TaskId, r.ReminderTime })
+                .IsUnique();
 
             modelBuilder.Entity<ApplicationUser>(entity =>
             {

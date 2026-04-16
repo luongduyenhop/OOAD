@@ -23,6 +23,7 @@ IF OBJECT_ID(N'[dbo].[AspNetUserClaims]', N'U') IS NOT NULL DROP TABLE [dbo].[As
 IF OBJECT_ID(N'[dbo].[AspNetUserLogins]', N'U') IS NOT NULL DROP TABLE [dbo].[AspNetUserLogins];
 IF OBJECT_ID(N'[dbo].[AspNetUserRoles]', N'U') IS NOT NULL DROP TABLE [dbo].[AspNetUserRoles];
 IF OBJECT_ID(N'[dbo].[AspNetUserTokens]', N'U') IS NOT NULL DROP TABLE [dbo].[AspNetUserTokens];
+IF OBJECT_ID(N'[dbo].[ReminderNotifications]', N'U') IS NOT NULL DROP TABLE [dbo].[ReminderNotifications];
 IF OBJECT_ID(N'[dbo].[Tasks]', N'U') IS NOT NULL DROP TABLE [dbo].[Tasks];
 IF OBJECT_ID(N'[dbo].[Categories]', N'U') IS NOT NULL DROP TABLE [dbo].[Categories];
 IF OBJECT_ID(N'[dbo].[AspNetRoles]', N'U') IS NOT NULL DROP TABLE [dbo].[AspNetRoles];
@@ -144,6 +145,7 @@ CREATE TABLE [dbo].[Tasks]
     [CategoryId]   INT NULL,
     [UserId]       INT NOT NULL,
     [Status]       INT NOT NULL CONSTRAINT [DF_Tasks_Status] DEFAULT(0),
+    [Priority]     INT NOT NULL CONSTRAINT [DF_Tasks_Priority] DEFAULT(1),
     [ReminderTime] DATETIME2 NULL,
     [TaskType]     NVARCHAR(20) NOT NULL,
     [Frequency]    NVARCHAR(50) NULL,
@@ -156,6 +158,30 @@ GO
 
 CREATE INDEX [IX_Tasks_CategoryId] ON [dbo].[Tasks]([CategoryId]);
 CREATE INDEX [IX_Tasks_UserId] ON [dbo].[Tasks]([UserId]);
+CREATE INDEX [IX_Tasks_UserId_DateTime] ON [dbo].[Tasks]([UserId], [DateTime]);
+CREATE INDEX [IX_Tasks_UserId_Status] ON [dbo].[Tasks]([UserId], [Status]);
+CREATE INDEX [IX_Tasks_UserId_CategoryId] ON [dbo].[Tasks]([UserId], [CategoryId]);
+CREATE INDEX [IX_Tasks_UserId_Priority] ON [dbo].[Tasks]([UserId], [Priority]);
+GO
+
+CREATE TABLE [dbo].[ReminderNotifications]
+(
+    [Id] INT IDENTITY(1,1) NOT NULL,
+    [UserId] INT NOT NULL,
+    [TaskId] INT NOT NULL,
+    [ReminderTime] DATETIME2 NOT NULL,
+    [CreatedAt] DATETIME2 NOT NULL CONSTRAINT [DF_ReminderNotifications_CreatedAt] DEFAULT (SYSUTCDATETIME()),
+    [SentAt] DATETIME2 NULL,
+    [IsRead] BIT NOT NULL CONSTRAINT [DF_ReminderNotifications_IsRead] DEFAULT (0),
+    [Message] NVARCHAR(500) NOT NULL,
+    CONSTRAINT [PK_ReminderNotifications] PRIMARY KEY ([Id]),
+    CONSTRAINT [FK_ReminderNotifications_AspNetUsers_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers]([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_ReminderNotifications_Tasks_TaskId] FOREIGN KEY ([TaskId]) REFERENCES [dbo].[Tasks]([Id]) ON DELETE CASCADE
+);
+GO
+
+CREATE INDEX [IX_ReminderNotifications_UserId_IsRead] ON [dbo].[ReminderNotifications]([UserId], [IsRead]);
+CREATE UNIQUE INDEX [IX_ReminderNotifications_TaskId_ReminderTime] ON [dbo].[ReminderNotifications]([TaskId], [ReminderTime]);
 GO
 
 /* =========================
@@ -175,9 +201,9 @@ DECLARE @AdminId INT = (
 
 IF @AdminId IS NOT NULL
 BEGIN
-    INSERT INTO [dbo].[Tasks] ([Title], [DateTime], [CategoryId], [UserId], [Status], [ReminderTime], [TaskType], [Frequency], [ExcludedDates])
+    INSERT INTO [dbo].[Tasks] ([Title], [DateTime], [CategoryId], [UserId], [Status], [Priority], [ReminderTime], [TaskType], [Frequency], [ExcludedDates])
     VALUES
-    (N'Họp khởi động dự án', SYSDATETIME(), 1, @AdminId, 0, NULL, N'Simple', NULL, NULL),
-    (N'Đọc sách mỗi ngày', SYSDATETIME(), 2, @AdminId, 0, NULL, N'Recurring', N'Daily', NULL);
+    (N'Họp khởi động dự án', SYSDATETIME(), 1, @AdminId, 0, 2, NULL, N'Simple', NULL, NULL),
+    (N'Đọc sách mỗi ngày', SYSDATETIME(), 2, @AdminId, 0, 1, NULL, N'Recurring', N'Daily', NULL);
 END
 GO

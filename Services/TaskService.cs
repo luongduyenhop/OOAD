@@ -10,10 +10,10 @@ namespace SchedulingApp.Services
 {
     public interface ITaskService
     {
-        Task CreateTaskAsync(int userId, string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency, DateTime? reminderTime);
-        Task<List<AppTask>> GetTasksAsync(int userId, string? searchTerm = null, int? categoryId = null, AppTaskStatus? status = null);
+        Task CreateTaskAsync(int userId, string title, string type, string categoryName, DateTime dateTime, TaskPriority priority, TaskFrequency frequency, DateTime? reminderTime);
+        Task<List<AppTask>> GetTasksAsync(int userId, string? searchTerm = null, int? categoryId = null, AppTaskStatus? status = null, TaskPriority? priority = null);
         Task<AppTask?> GetTaskByIdAsync(int taskId, int userId);
-        Task UpdateTaskAsync(int userId, int taskId, string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency, DateTime? reminderTime, AppTaskStatus? status);
+        Task UpdateTaskAsync(int userId, int taskId, string title, string type, string categoryName, DateTime dateTime, TaskPriority priority, TaskFrequency frequency, DateTime? reminderTime, AppTaskStatus? status);
         Task UpdateStatusAsync(int taskId, int userId, AppTaskStatus newStatus, DateTime? date = null);
         Task DeleteTaskAsync(int taskId, int userId);
 
@@ -88,7 +88,7 @@ namespace SchedulingApp.Services
             return counts;
         }
    
-        public async Task CreateTaskAsync(int userId, string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency, DateTime? reminderTime)
+        public async Task CreateTaskAsync(int userId, string title, string type, string categoryName, DateTime dateTime, TaskPriority priority, TaskFrequency frequency, DateTime? reminderTime)
         {
             var category = await GetOrCreateCategoryAsync(categoryName);
             AppTask newTask = type == "Recurring" 
@@ -99,19 +99,21 @@ namespace SchedulingApp.Services
             newTask.Title = title;
             newTask.DateTime = dateTime;
             newTask.Category = category;
+            newTask.Priority = priority;
             newTask.ReminderTime = reminderTime;
 
             _context.Tasks.Add(newTask);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<List<AppTask>> GetTasksAsync(int userId, string? searchTerm = null, int? categoryId = null, AppTaskStatus? status = null)
+        public async Task<List<AppTask>> GetTasksAsync(int userId, string? searchTerm = null, int? categoryId = null, AppTaskStatus? status = null, TaskPriority? priority = null)
         {
             var query = _context.Tasks.Include(t => t.Category).Where(t => t.UserId == userId);
 
             if (!string.IsNullOrEmpty(searchTerm)) query = query.Where(t => t.Title.Contains(searchTerm));
             if (categoryId.HasValue) query = query.Where(t => t.CategoryId == categoryId);
             if (status.HasValue) query = query.Where(t => t.Status == status);
+            if (priority.HasValue) query = query.Where(t => t.Priority == priority.Value);
 
             var tasks = await query.ToListAsync();
             
@@ -131,7 +133,7 @@ namespace SchedulingApp.Services
             return await _context.Tasks.Include(t => t.Category).FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
         }
 
-        public async Task UpdateTaskAsync(int userId, int taskId, string title, string type, string categoryName, DateTime dateTime, TaskFrequency frequency, DateTime? reminderTime, AppTaskStatus? status)
+        public async Task UpdateTaskAsync(int userId, int taskId, string title, string type, string categoryName, DateTime dateTime, TaskPriority priority, TaskFrequency frequency, DateTime? reminderTime, AppTaskStatus? status)
         {
             var existingTask = await GetTaskByIdAsync(taskId, userId);
             if (existingTask == null) return;
@@ -150,6 +152,7 @@ namespace SchedulingApp.Services
                 newTask.Title = title;
                 newTask.DateTime = dateTime;
                 newTask.Category = category;
+                newTask.Priority = priority;
                 newTask.ReminderTime = reminderTime;
                 if (status.HasValue) newTask.Status = status.Value;
 
@@ -160,6 +163,7 @@ namespace SchedulingApp.Services
                 existingTask.Title = title;
                 existingTask.DateTime = dateTime;
                 existingTask.Category = category;
+                existingTask.Priority = priority;
                 existingTask.ReminderTime = reminderTime;
                 if (status.HasValue) existingTask.Status = status.Value;
                 if (existingTask is RecurringTask rt) rt.Frequency = frequency;
@@ -185,6 +189,7 @@ namespace SchedulingApp.Services
                     DateTime = date.Value, 
                     CategoryId = task.CategoryId,
                     UserId = task.UserId,
+                    Priority = task.Priority,
                     Status = newStatus, 
                     ReminderTime = task.ReminderTime 
                 };
