@@ -63,6 +63,21 @@ namespace SchedulingApp.Controllers
         }
 
         [HttpPost]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateProfile(string fullName)
+        {
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login");
+
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                await _authService.UpdateProfileAsync(userId.Value, fullName);
+            }
+            return RedirectToAction("Index", "Tasks");
+        }
+
+        [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {

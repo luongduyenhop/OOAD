@@ -15,6 +15,7 @@ namespace SchedulingApp.Services
         int? GetCurrentUserId();
         string? GetCurrentUserName();
         bool IsAuthenticated();
+        Task<bool> UpdateProfileAsync(int userId, string fullName);
     }
 
     public class AuthService : IAuthService
@@ -31,6 +32,22 @@ namespace SchedulingApp.Services
             _userManager = userManager;
             _signInManager = signInManager;
             _httpContextAccessor = httpContextAccessor;
+        }
+
+        public async Task<bool> UpdateProfileAsync(int userId, string fullName)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+
+            user.FullName = fullName.Trim();
+            var result = await _userManager.UpdateAsync(user);
+            if (result.Succeeded)
+            {
+                // Refresh sign in to update claims if needed (though FullName might not be in identity cookie by default)
+                await _signInManager.RefreshSignInAsync(user);
+                return true;
+            }
+            return false;
         }
 
         public async Task<bool> LoginAsync(string identifier, string password)
@@ -104,7 +121,11 @@ namespace SchedulingApp.Services
 
         public string? GetCurrentUserName()
         {
-            return _httpContextAccessor.HttpContext?.User.Identity?.Name;
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue) return null;
+
+            var user = _userManager.FindByIdAsync(userId.ToString()).Result;
+            return user?.FullName ?? _httpContextAccessor.HttpContext?.User.Identity?.Name;
         }
 
         public bool IsAuthenticated()

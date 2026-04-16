@@ -37,9 +37,20 @@ namespace SchedulingApp.Models
     {
         [Key]
         public int Id { get; set; }
+
+        [MaxLength(50)]
         public string Name { get; set; } = string.Empty;
+
+        public int UserId { get; set; }
+        public ApplicationUser? User { get; set; }
+
         public Category() { }
-        public Category(string name) => Name = name;
+
+        public Category(string name, int userId)
+        {
+            Name = name;
+            UserId = userId;
+        }
     }
 
     public abstract class AppTask
@@ -72,7 +83,7 @@ namespace SchedulingApp.Models
             };
         }
 
-        // OOAD: Đóng gói logic chuyển đổi trạng thái (State Machine)
+        // OOAD: Dong goi logic chuyen doi trang thai (State Machine)
         public IEnumerable<AppTaskStatus> GetAvailableTransitions()
         {
             if (Status == AppTaskStatus.Archived)
@@ -116,7 +127,7 @@ namespace SchedulingApp.Models
     public class SimpleTask : AppTask
     {
         public override string GetDetails() =>
-            $"Công việc: {Title} vào {DateTime:HH:mm dd/MM/yyyy} ({Category?.Name}) - Ưu tiên: {Priority} - Trạng thái: {GetStatusLabel()}";
+            $"Cong viec: {Title} vao {DateTime:HH:mm dd/MM/yyyy} ({Category?.Name}) - Uu tien: {Priority} - Trang thai: {GetStatusLabel()}";
 
         public override IEnumerable<DateTime> GetOccurrences(DateTime rangeStart, DateTime rangeEnd)
         {
@@ -132,15 +143,15 @@ namespace SchedulingApp.Models
         public string? ExcludedDates { get; set; }
 
         public override string GetDetails() =>
-            $"[LẶP LẠI {Frequency}] {Title} lúc {DateTime:HH:mm} ({Category?.Name}) - Ưu tiên: {Priority} - Trạng thái: {GetStatusLabel()}";
+            $"[LAP LAI {Frequency}] {Title} luc {DateTime:HH:mm} ({Category?.Name}) - Uu tien: {Priority} - Trang thai: {GetStatusLabel()}";
 
         public override IEnumerable<DateTime> GetOccurrences(DateTime rangeStart, DateTime rangeEnd)
         {
             DateTime current = DateTime;
             DateTime limit = DateTime.AddYears(1) < rangeEnd ? DateTime.AddYears(1) : rangeEnd;
-            
-            var excludedList = string.IsNullOrEmpty(ExcludedDates) 
-                ? new List<string>() 
+
+            var excludedList = string.IsNullOrEmpty(ExcludedDates)
+                ? new List<string>()
                 : ExcludedDates.Split(',').ToList();
 
             while (current <= limit)

@@ -73,7 +73,6 @@
             <a class="navbar-brand d-flex align-items-center" href="/">
                 <img src="https://www.gstatic.com/images/branding/product/1x/calendar_2020q4_48dp.png" width="40" height="40" class="me-2" alt="Logo">
                 <span class="d-none d-md-inline">Smart Scheduler</span>
-                <span class="ms-2 badge bg-light text-primary border border-primary-subtle fw-normal" style="font-size: 0.6rem;">OOAD BCE Pattern</span>
             </a>
             
             <div class="ms-auto d-flex align-items-center gap-3">
@@ -81,18 +80,50 @@
                 {
                     <div class="d-none d-lg-block text-end me-3">
                         <div class="small fw-bold">@currentUserName</div>
-                        <form asp-controller="Account" asp-action="Logout" method="post" class="smaller text-muted mb-0">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-link p-0 text-decoration-none text-danger">Đăng xuất</button>
-                        </form>
+                        <div class="d-flex gap-2 justify-content-end smaller">
+                            <a href="#" class="text-decoration-none text-primary" data-bs-toggle="modal" data-bs-target="#profileModal">Hồ sơ</a>
+                            <span class="text-muted">|</span>
+                            <form asp-controller="Account" asp-action="Logout" method="post" class="mb-0">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-link p-0 text-decoration-none text-danger smaller">Đăng xuất</button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; font-weight: 600;">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center cursor-pointer" style="width: 38px; height: 38px; font-weight: 600;" data-bs-toggle="modal" data-bs-target="#profileModal">
                         @currentUserName.Substring(0, 1).ToUpperInvariant()
                     </div>
                 }
             </div>
         </div>
     </nav>
+
+    <!-- Modal Hồ sơ -->
+    <div class="modal fade" id="profileModal" tabindex="-1">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header border-0 bg-light">
+                    <h6 class="modal-title fw-bold">Hồ sơ cá nhân</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form asp-controller="Account" asp-action="UpdateProfile" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4 text-center">
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 64px; height: 64px; font-size: 1.5rem; font-weight: 600;">
+                            @currentUserName?.Substring(0, 1).ToUpperInvariant()
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Họ và tên</label>
+                            <input name="fullName" class="form-control text-center fw-bold border-0 border-bottom rounded-0 px-0" value="@currentUserName" required />
+                        </div>
+                        <p class="smaller text-muted">Dữ liệu được bảo mật theo chuẩn OOAD</p>
+                    </div>
+                    <div class="modal-footer border-0 p-3 pt-0">
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill">Cập nhật tên</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <div class="main-container">
         @RenderBody()

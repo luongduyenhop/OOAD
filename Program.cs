@@ -33,10 +33,13 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
 builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddHostedService<ReminderBackgroundService>();
+
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
@@ -46,7 +49,7 @@ var shouldResetDatabase = false;
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    // Nếu DB cũ chưa có schema Identity, đánh dấu reset để tránh lỗi runtime "Invalid object name 'AspNetUsers'".
+
     if (context.Database.CanConnect() && !TableExists(context, "AspNetUsers"))
     {
         shouldResetDatabase = true;
@@ -62,8 +65,10 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     context.Database.EnsureCreated();
+
     EnsureTaskPriorityColumn(context);
     EnsureReminderNotificationsTable(context);
+    EnsureCategoriesPerUser(context);
 
     if (app.Environment.IsDevelopment())
     {
@@ -76,7 +81,7 @@ using (var scope = app.Services.CreateScope())
             {
                 UserName = adminEmail,
                 Email = adminEmail,
-                FullName = "Quản trị viên"
+                FullName = "Quan tri vien"
             };
 
             await userManager.CreateAsync(adminUser, "Admin1234");
@@ -186,5 +191,64 @@ CREATE TABLE [dbo].[ReminderNotifications]
 );
 CREATE INDEX [IX_ReminderNotifications_UserId_IsRead] ON [dbo].[ReminderNotifications]([UserId], [IsRead]);
 CREATE UNIQUE INDEX [IX_ReminderNotifications_TaskId_ReminderTime] ON [dbo].[ReminderNotifications]([TaskId], [ReminderTime]);
+");
+}
+
+static void EnsureCategoriesPerUser(AppDbContext context)
+{
+    if (!TableExists(context, "Categories"))
+    {
+        return;
+    }
+
+    // Fresh DB created from current model already has UserId.
+    if (ColumnExists(context, "Categories", "UserId"))
+    {
+        return;
+    }
+
+    // Migrate legacy shared Categories -> per-user Categories based on Tasks ownership.
+    context.Database.ExecuteSqlRaw(@"
+IF OBJECT_ID(N'[dbo].[Categories_New]', N'U') IS NOT NULL
+    DROP TABLE [dbo].[Categories_New];
+
+CREATE TABLE [dbo].[Categories_New]
+(
+    [Id] INT IDENTITY(1,1) NOT NULL,
+    [Name] NVARCHAR(50) NOT NULL,
+    [UserId] INT NOT NULL,
+    CONSTRAINT [PK_Categories_New] PRIMARY KEY ([Id]),
+    CONSTRAINT [FK_Categories_New_AspNetUsers_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers]([Id]) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX [IX_Categories_New_UserId_Name] ON [dbo].[Categories_New]([UserId], [Name]);
+
+INSERT INTO [dbo].[Categories_New] ([Name], [UserId])
+SELECT DISTINCT c.[Name], t.[UserId]
+FROM [dbo].[Tasks] t
+INNER JOIN [dbo].[Categories] c ON c.[Id] = t.[CategoryId]
+WHERE t.[CategoryId] IS NOT NULL;
+
+DECLARE @fk sysname;
+SELECT @fk = fk.name
+FROM sys.foreign_keys fk
+WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[Tasks]')
+  AND fk.referenced_object_id = OBJECT_ID(N'[dbo].[Categories]');
+IF @fk IS NOT NULL EXEC('ALTER TABLE [dbo].[Tasks] DROP CONSTRAINT [' + @fk + ']');
+
+UPDATE t
+SET t.[CategoryId] = cn.[Id]
+FROM [dbo].[Tasks] t
+INNER JOIN [dbo].[Categories] c ON c.[Id] = t.[CategoryId]
+INNER JOIN [dbo].[Categories_New] cn ON cn.[UserId] = t.[UserId] AND cn.[Name] = c.[Name];
+
+DROP TABLE [dbo].[Categories];
+EXEC sp_rename 'dbo.Categories_New', 'Categories';
+
+ALTER TABLE [dbo].[Tasks] WITH CHECK ADD CONSTRAINT [FK_Tasks_Categories_CategoryId]
+FOREIGN KEY ([CategoryId]) REFERENCES [dbo].[Categories]([Id]);
+
+CREATE INDEX [IX_Categories_UserId] ON [dbo].[Categories]([UserId]);
+CREATE UNIQUE INDEX [IX_Categories_UserId_Name] ON [dbo].[Categories]([UserId], [Name]);
 ");
 }

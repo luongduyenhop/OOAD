@@ -1,6 +1,6 @@
 using System;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SchedulingApp.Models;
 
@@ -18,24 +18,31 @@ namespace SchedulingApp.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Cấu hình kế thừa TPH (Table-per-Hierarchy) - OOAD: Inheritance Mapping
             modelBuilder.Entity<AppTask>()
                 .HasDiscriminator<string>("TaskType")
                 .HasValue<SimpleTask>("Simple")
                 .HasValue<RecurringTask>("Recurring");
 
-            // Chuyển đổi Enum TaskFrequency sang String khi lưu vào DB (OOAD: Data Compatibility)
             modelBuilder.Entity<RecurringTask>()
                 .Property(t => t.Frequency)
                 .HasConversion(
                     v => v == TaskFrequency.Monday_Friday ? "Monday-Friday" : v.ToString(),
                     v => v == "Monday-Friday" ? TaskFrequency.Monday_Friday : (TaskFrequency)Enum.Parse(typeof(TaskFrequency), v));
 
-            // Thiết lập quan hệ
             modelBuilder.Entity<AppTask>()
                 .HasOne(t => t.Category)
                 .WithMany()
                 .HasForeignKey("CategoryId");
+
+            modelBuilder.Entity<Category>()
+                .HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => new { c.UserId, c.Name })
+                .IsUnique();
 
             modelBuilder.Entity<AppTask>()
                 .HasIndex(t => new { t.UserId, t.DateTime });

@@ -21,9 +21,9 @@
     };
 }
 
-<div class="row g-0 h-100" style="min-height: calc(100vh - 80px);">
+<div class="row g-0 h-100" style="height: calc(100vh - 64px);">
     <!-- Sidebar -->
-    <aside class="col-md-3 col-lg-2 border-end bg-white p-4 d-flex flex-column shadow-sm">
+    <aside class="col-md-3 col-lg-2 border-end bg-white p-4 d-flex flex-column shadow-sm" style="height: 100%; overflow-y: auto;">
         @if (TempData["EmailTest"] != null)
         {
             <div class="alert alert-info py-2 small">@TempData["EmailTest"]</div>
@@ -40,16 +40,26 @@
                     <i class="bi bi-gear-fill"></i>
                 </button>
             </div>
-            <ul class="list-unstyled d-flex flex-column gap-2 small">
-                <li><a href="/" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"].Count == 0 ? "fw-bold text-primary" : "")">Tất cả</a></li>
-                @foreach (var cat in categories) {
-                    <li class="d-flex align-items-center justify-content-between">
-                        <a href="?categoryId=@cat.Id" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"] == cat.Id.ToString() ? "fw-bold text-primary" : "")">
-                            <span class="badge rounded-circle p-1 me-2" style="background-color: #4285f4; width: 8px; height: 8px; display: inline-block;"></span>@cat.Name
-                        </a>
-                    </li>
-                }
-            </ul>
+            <div style="max-height: 120px; overflow-y: auto; padding-right: 5px;">
+                <ul class="list-unstyled d-flex flex-column gap-2 small">
+                    <li><a href="/" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"].Count == 0 ? "fw-bold text-primary" : "")">Tất cả</a></li>
+                    @foreach (var cat in categories) {
+                        <li class="d-flex align-items-center justify-content-between">
+                            <a href="?categoryId=@cat.Id" class="text-decoration-none text-dark @(Context.Request.Query["categoryId"] == cat.Id.ToString() ? "fw-bold text-primary" : "")">
+                                <span class="badge rounded-circle p-1 me-2" style="background-color: #4285f4; width: 8px; height: 8px; display: inline-block;"></span>@cat.Name
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <h6 class="text-muted text-uppercase small fw-bold mb-3 ls-wide">📊 Thống kê tiến độ</h6>
+            <div style="height: 150px;">
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div id="completionRate" class="text-center mt-2 small fw-bold text-primary"></div>
         </div>
 
         <div class="mb-4">
@@ -75,6 +85,11 @@
                         <span class="badge @badgeClass rounded-pill">@count</span>
                     </a>
                 }
+                <hr class="my-2">
+                <a href="?status=Archived" class="text-decoration-none d-flex justify-content-between align-items-center p-2 rounded-2 hover-bg-light @(Context.Request.Query["status"] == "Archived" ? "bg-dark text-white fw-bold" : "text-muted")">
+                    <span class="small">📦 Kho lưu trữ</span>
+                    <span class="badge bg-dark rounded-pill">@(statusCounts.ContainsKey(AppTaskStatus.Archived) ? statusCounts[AppTaskStatus.Archived] : 0)</span>
+                </a>
             </div>
         </div>
 
@@ -83,10 +98,6 @@
                 <h6 class="text-muted text-uppercase small fw-bold mb-0 ls-wide">🔔 Nhắc việc</h6>
                 <span class="badge bg-danger rounded-pill">@unreadReminderCount</span>
             </div>
-
-            <form asp-action="SendTestReminderEmail" method="post" class="mb-2">
-                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Gửi email test</button>
-            </form>
 
             @if (reminders.Count == 0)
             {
@@ -115,9 +126,9 @@
         </div>
 
         <div class="mt-auto pt-3 border-top">
-            <div class="small text-muted mb-2"><i class="bi bi-info-circle me-1"></i> OOAD Pattern: BCE</div>
+            <div class="small text-muted mb-2"><i class="bi bi-shield-check me-1"></i> Hệ thống bảo mật</div>
             <div class="d-flex gap-2">
-                <span class="badge bg-outline-secondary border text-dark smaller">State Machine Ready</span>
+                <span class="badge bg-light text-dark border smaller fw-normal">Version 1.0.0</span>
             </div>
         </div>
     </aside>
@@ -441,11 +452,14 @@
 
                 events: [
                     @foreach (var task in Model) {
-                        if (task.Status == AppTaskStatus.Archived) continue;
+                        // Chỉ ẩn task lưu trữ khi người dùng ĐANG KHÔNG lọc theo trạng thái Archived
+                        if (task.Status == AppTaskStatus.Archived && Context.Request.Query["status"] != "Archived") continue;
+                        
                         var color = "#4285f4";
                         if (task.Status == AppTaskStatus.InProgress) color = "#1a73e8";
                         if (task.Status == AppTaskStatus.Completed) color = "#0f9d58";
                         if (task.Status == AppTaskStatus.Overdue) color = "#db4437";
+                        if (task.Status == AppTaskStatus.Archived) color = "#6c757d"; // Màu xám cho task lưu trữ
                         
                         var titlePrefix = task is RecurringTask ? "🔄 " : "";
                         foreach (var occDate in task.GetOccurrences(DateTime.Now.AddMonths(-1), DateTime.Now.AddMonths(6))) {
@@ -507,4 +521,37 @@
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const counts = {
+                created: @(statusCounts.ContainsKey(AppTaskStatus.Created) ? statusCounts[AppTaskStatus.Created] : 0),
+                inProgress: @(statusCounts.ContainsKey(AppTaskStatus.InProgress) ? statusCounts[AppTaskStatus.InProgress] : 0),
+                completed: @(statusCounts.ContainsKey(AppTaskStatus.Completed) ? statusCounts[AppTaskStatus.Completed] : 0),
+                overdue: @(statusCounts.ContainsKey(AppTaskStatus.Overdue) ? statusCounts[AppTaskStatus.Overdue] : 0)
+            };
+
+            const total = counts.created + counts.inProgress + counts.completed + counts.overdue;
+            const completionRate = total > 0 ? Math.round((counts.completed / total) * 100) : 0;
+            document.getElementById('completionRate').innerText = `Hoàn thành: ${completionRate}%`;
+
+            new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Quá hạn'],
+                    datasets: [{
+                        data: [counts.created, counts.inProgress, counts.completed, counts.overdue],
+                        backgroundColor: ['#6c757d', '#4285f4', '#0f9d58', '#db4437'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false } },
+                    cutout: '70%',
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        });
+    </script>
 }

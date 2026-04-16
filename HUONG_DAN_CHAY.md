@@ -80,6 +80,13 @@ Luu y:
 
 ## 7. Reminder in-app
 
+## 7.1 Danh muc (Category) theo tai khoan
+
+- Danh muc la rieng theo tung tai khoan (khong dung chung).
+- Lan dau tien user vao trang Tasks, he thong tu tao 3 danh muc mac dinh: Cong viec, Ca nhan, Hoc tap.
+- CRUD danh muc trong modal "Quan ly danh muc" chi tac dong tren danh muc cua user dang dang nhap.
+
+
 - Reminder engine chay nen moi ~30 giay.
 - Khi task den gio nhac, he thong tao `ReminderNotification` (in-app).
 - Tren trang Tasks co danh sach nhac viec chua doc + nut danh dau da doc.

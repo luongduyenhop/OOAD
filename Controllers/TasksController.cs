@@ -26,13 +26,15 @@ namespace SchedulingApp.Controllers
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
-            
+
             var tasks = await _taskService.GetTasksAsync(userId.Value, searchTerm, categoryId, status, priority);
-            ViewBag.Categories = await _taskService.GetCategoriesAsync();
-            ViewBag.StatusCounts = await _taskService.GetStatusCountsAsync(userId.Value); // Gửi thống kê trạng thái
+            ViewBag.Categories = await _taskService.GetCategoriesAsync(userId.Value);
+            ViewBag.StatusCounts = await _taskService.GetStatusCountsAsync(userId.Value);
+
             var unread = await _reminderService.GetUnreadNotificationsAsync(userId.Value, 10);
             ViewBag.ReminderNotifications = unread;
             ViewBag.UnreadReminderCount = unread.Count;
+
             return View(tasks);
         }
 
@@ -66,7 +68,10 @@ namespace SchedulingApp.Controllers
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
 
             var result = await _reminderService.SendTestEmailAsync(userId.Value);
-            TempData["EmailTest"] = result.Success ? "Gui email test thanh cong. Kiem tra Inbox/Spam." : $"Gui email test that bai: {result.Error}";
+            TempData["EmailTest"] = result.Success
+                ? "Gui email test thanh cong. Kiem tra Inbox/Spam."
+                : $"Gui email test that bai: {result.Error}";
+
             return RedirectToAction("Index");
         }
 
@@ -74,7 +79,10 @@ namespace SchedulingApp.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddCategory(string name)
         {
-            await _taskService.AddCategoryAsync(name);
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
+            await _taskService.AddCategoryAsync(userId.Value, name);
             return RedirectToAction("Index");
         }
 
@@ -82,7 +90,10 @@ namespace SchedulingApp.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteCategory(int id)
         {
-            await _taskService.DeleteCategoryAsync(id);
+            var userId = _authService.GetCurrentUserId();
+            if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
+            await _taskService.DeleteCategoryAsync(userId.Value, id);
             return RedirectToAction("Index");
         }
 
@@ -92,7 +103,7 @@ namespace SchedulingApp.Controllers
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
-            
+
             await _taskService.CreateTaskAsync(userId.Value, title, type, categoryName, dateTime, priority, frequency, reminderTime);
             return RedirectToAction("Index");
         }
@@ -113,6 +124,7 @@ namespace SchedulingApp.Controllers
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
+
             var task = await _taskService.GetTaskByIdAsync(id, userId.Value);
             if (task == null) return NotFound();
 
@@ -126,8 +138,11 @@ namespace SchedulingApp.Controllers
                 _ => task.Status.ToString()
             };
 
-            return Json(new { 
-                id = task.Id, title = task.Title, dateTime = task.DateTime.ToString("yyyy-MM-ddTHH:mm"),
+            return Json(new
+            {
+                id = task.Id,
+                title = task.Title,
+                dateTime = task.DateTime.ToString("yyyy-MM-ddTHH:mm"),
                 categoryName = task.Category?.Name,
                 type = task is RecurringTask ? "Recurring" : "Simple",
                 frequency = (task as RecurringTask)?.Frequency.ToString() ?? "None",
@@ -135,7 +150,7 @@ namespace SchedulingApp.Controllers
                 status = task.Status.ToString(),
                 statusLabel,
                 reminderTime = task.ReminderTime?.ToString("yyyy-MM-ddTHH:mm"),
-                transitions = task.GetAvailableTransitions().Select(t => t.ToString()) // Trả về danh sách hành động hợp lệ
+                transitions = task.GetAvailableTransitions().Select(t => t.ToString())
             });
         }
 
@@ -145,16 +160,18 @@ namespace SchedulingApp.Controllers
         {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
-            
+
             await _taskService.UpdateTaskAsync(userId.Value, id, title, type, categoryName, dateTime, priority, frequency, reminderTime, status);
             return RedirectToAction("Index");
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id) {
+        public async Task<IActionResult> Delete(int id)
+        {
             var userId = _authService.GetCurrentUserId();
             if (!userId.HasValue) return RedirectToAction("Login", "Account");
+
             await _taskService.DeleteTaskAsync(id, userId.Value);
             return RedirectToAction("Index");
         }

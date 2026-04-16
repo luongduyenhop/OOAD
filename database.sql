@@ -131,10 +131,15 @@ GO
 
 CREATE TABLE [dbo].[Categories]
 (
-    [Id]   INT IDENTITY(1,1) NOT NULL,
-    [Name] NVARCHAR(50) NOT NULL,
-    CONSTRAINT [PK_Categories] PRIMARY KEY ([Id])
+    [Id]     INT IDENTITY(1,1) NOT NULL,
+    [Name]   NVARCHAR(50) NOT NULL,
+    [UserId] INT NOT NULL,
+    CONSTRAINT [PK_Categories] PRIMARY KEY ([Id]),
+    CONSTRAINT [FK_Categories_AspNetUsers_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers]([Id]) ON DELETE CASCADE
 );
+GO
+
+CREATE UNIQUE INDEX [IX_Categories_UserId_Name] ON [dbo].[Categories]([UserId], [Name]);
 GO
 
 CREATE TABLE [dbo].[Tasks]
@@ -184,26 +189,3 @@ CREATE INDEX [IX_ReminderNotifications_UserId_IsRead] ON [dbo].[ReminderNotifica
 CREATE UNIQUE INDEX [IX_ReminderNotifications_TaskId_ReminderTime] ON [dbo].[ReminderNotifications]([TaskId], [ReminderTime]);
 GO
 
-/* =========================
-   Seed sample categories
-   ========================= */
-
-INSERT INTO [dbo].[Categories] ([Name])
-VALUES (N'Công việc'), (N'Cá nhân'), (N'Học tập');
-GO
-
--- Optional sample tasks for admin if account exists.
-DECLARE @AdminId INT = (
-    SELECT TOP 1 [Id]
-    FROM [dbo].[AspNetUsers]
-    WHERE [NormalizedUserName] = N'ADMIN'
-);
-
-IF @AdminId IS NOT NULL
-BEGIN
-    INSERT INTO [dbo].[Tasks] ([Title], [DateTime], [CategoryId], [UserId], [Status], [Priority], [ReminderTime], [TaskType], [Frequency], [ExcludedDates])
-    VALUES
-    (N'Họp khởi động dự án', SYSDATETIME(), 1, @AdminId, 0, 2, NULL, N'Simple', NULL, NULL),
-    (N'Đọc sách mỗi ngày', SYSDATETIME(), 2, @AdminId, 0, 1, NULL, N'Recurring', N'Daily', NULL);
-END
-GO
